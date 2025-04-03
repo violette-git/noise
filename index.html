@@ -1,0 +1,1228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ambient Noise Generator</title>
+    <!-- 
+    BROWSER COMPATIBILITY NOTES:
+    - Web Audio API is supported in all modern browsers (Chrome, Firefox, Safari, Edge)
+    - Recording functionality may have limitations in Safari due to MediaRecorder API restrictions
+    - Mobile browsers may have autoplay restrictions requiring user interaction before audio playback
+    - For optimal experience, use Chrome or Firefox on desktop
+    - iOS devices require user interaction before audio can play
+    - Some older browsers may not support all features
+    
+    KNOWN LIMITATIONS:
+    - Maximum recording time is limited to 1 hour
+    - Export functionality depends on browser's memory capabilities for large files
+    - Volume control behavior may vary slightly between browsers
+    - Audio visualization may impact performance on low-end devices
+    -->
+    <style>
+        :root {
+            --primary-color: #3a86ff;
+            --primary-hover: #4361ee;
+            --secondary-color: #7209b7;
+            --accent-color: #f72585;
+            --text-color: #f8f9fa;
+            --background-color: #121212;
+            --card-background: rgba(255, 255, 255, 0.05);
+            --card-border: rgba(255, 255, 255, 0.1);
+            --success-color: #4cc9f0;
+            --error-color: #e63946;
+            --transition-speed: 0.3s;
+            --border-radius: 12px;
+            --shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            --focus-outline: 3px solid rgba(58, 134, 255, 0.6);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+        }
+
+        body {
+            background-color: var(--background-color);
+            color: var(--text-color);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            line-height: 1.6;
+            transition: background-color var(--transition-speed);
+        }
+
+        .container {
+            width: 100%;
+            max-width: 800px;
+            background: var(--card-background);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--card-border);
+            border-radius: var(--border-radius);
+            padding: 30px;
+            box-shadow: var(--shadow);
+            transition: all var(--transition-speed);
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            margin-bottom: 20px;
+            text-align: center;
+            background: linear-gradient(90deg, var(--primary-color), var(--accent-color));
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            font-weight: 800;
+        }
+
+        .description {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 1.1rem;
+            opacity: 0.8;
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .control-group {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 20px;
+            border-radius: var(--border-radius);
+            transition: all var(--transition-speed);
+        }
+
+        .control-group:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+        }
+
+        .control-group h2 {
+            margin-bottom: 15px;
+            font-size: 1.3rem;
+            color: var(--primary-color);
+        }
+
+        .btn {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: all var(--transition-speed);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            margin-bottom: 10px;
+        }
+
+        .btn:hover {
+            background-color: var(--primary-hover);
+            transform: translateY(-2px);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        /* Add focus styles for better accessibility */
+        .btn:focus {
+            outline: var(--focus-outline);
+            outline-offset: 2px;
+        }
+
+        .btn-secondary {
+            background-color: var(--secondary-color);
+        }
+
+        .btn-secondary:hover {
+            background-color: #8a2be2;
+        }
+
+        .btn-accent {
+            background-color: var(--accent-color);
+        }
+
+        .btn-accent:hover {
+            background-color: #ff0a54;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .btn-group .btn {
+            margin-bottom: 0;
+        }
+
+        .noise-types {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        .noise-type {
+            flex: 1;
+            min-width: 100px;
+            padding: 12px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 2px solid transparent;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            text-align: center;
+            transition: all var(--transition-speed);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .noise-type:hover {
+            background: rgba(0, 0, 0, 0.4);
+        }
+
+        .noise-type.active {
+            border-color: var(--primary-color);
+            background: rgba(58, 134, 255, 0.2);
+        }
+
+        /* Add focus styles for noise type buttons */
+        .noise-type:focus {
+            outline: var(--focus-outline);
+            outline-offset: 2px;
+        }
+
+        .noise-type::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: var(--primary-color);
+            transform: scaleX(0);
+            transition: transform var(--transition-speed);
+            transform-origin: left;
+        }
+
+        .noise-type.active::before {
+            transform: scaleX(1);
+        }
+
+        .noise-type-icon {
+            font-size: 1.5rem;
+            margin-bottom: 5px;
+        }
+
+        .volume-control {
+            margin-bottom: 20px;
+        }
+
+        .volume-slider {
+            width: 100%;
+            height: 8px;
+            -webkit-appearance: none;
+            appearance: none;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            outline: none;
+            margin: 10px 0;
+        }
+
+        .volume-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: var(--primary-color);
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all var(--transition-speed);
+        }
+
+        .volume-slider::-webkit-slider-thumb:hover {
+            background: var(--primary-hover);
+            transform: scale(1.2);
+        }
+
+        .volume-slider::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            background: var(--primary-color);
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+            transition: all var(--transition-speed);
+        }
+
+        .volume-slider::-moz-range-thumb:hover {
+            background: var(--primary-hover);
+            transform: scale(1.2);
+        }
+
+        /* Add focus styles for volume slider */
+        .volume-slider:focus {
+            outline: var(--focus-outline);
+            outline-offset: 2px;
+        }
+
+        .volume-value {
+            text-align: right;
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+
+        .visualizer-container {
+            width: 100%;
+            height: 100px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: var(--border-radius);
+            margin-bottom: 20px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 20px;
+            padding: 15px;
+            border-radius: var(--border-radius);
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: #555;
+        }
+
+        .status-indicator.active {
+            background-color: var(--success-color);
+            box-shadow: 0 0 10px var(--success-color);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(76, 201, 240, 0.7);
+            }
+            70% {
+                box-shadow: 0 0 0 10px rgba(76, 201, 240, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(76, 201, 240, 0);
+            }
+        }
+
+        .status-text {
+            flex: 1;
+        }
+
+        .recording-timer {
+            font-family: monospace;
+            font-size: 1.2rem;
+            color: var(--success-color);
+        }
+
+        .presets-container {
+            margin-bottom: 20px;
+        }
+
+        .presets {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .preset {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--card-border);
+            border-radius: var(--border-radius);
+            padding: 10px 15px;
+            cursor: pointer;
+            transition: all var(--transition-speed);
+        }
+
+        .preset:hover {
+            background: rgba(0, 0, 0, 0.5);
+            transform: translateY(-2px);
+        }
+
+        /* Add focus styles for presets */
+        .preset:focus {
+            outline: var(--focus-outline);
+            outline-offset: 2px;
+        }
+
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 200px;
+            background-color: rgba(0, 0, 0, 0.8);
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 10px;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%;
+            left: 50%;
+            transform: translateX(-50%);
+            opacity: 0;
+            transition: opacity var(--transition-speed);
+            font-size: 0.9rem;
+        }
+
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        .keyboard-shortcuts {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: var(--border-radius);
+        }
+
+        .keyboard-shortcuts h3 {
+            margin-bottom: 10px;
+            color: var(--primary-color);
+        }
+
+        .shortcut-grid {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 8px 15px;
+        }
+
+        .key {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: monospace;
+            display: inline-block;
+        }
+
+        .footer {
+            margin-top: 30px;
+            text-align: center;
+            opacity: 0.7;
+            font-size: 0.9rem;
+        }
+
+        /* Add focus styles for links */
+        a:focus {
+            outline: var(--focus-outline);
+            outline-offset: 2px;
+        }
+
+        /* Mobile Responsiveness */
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+
+            h1 {
+                font-size: 2rem;
+            }
+
+            .controls {
+                grid-template-columns: 1fr;
+            }
+
+            .btn-group {
+                flex-direction: column;
+            }
+
+            .noise-types {
+                flex-direction: column;
+            }
+
+            .noise-type {
+                width: 100%;
+            }
+        }
+
+        /* Dark/Light mode toggle */
+        .theme-toggle {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: none;
+            border: none;
+            color: var(--text-color);
+            font-size: 1.5rem;
+            cursor: pointer;
+            transition: transform var(--transition-speed);
+        }
+
+        .theme-toggle:hover {
+            transform: rotate(30deg);
+        }
+
+        /* Add focus styles for theme toggle */
+        .theme-toggle:focus {
+            outline: var(--focus-outline);
+            outline-offset: 2px;
+        }
+
+        /* Light theme variables */
+        body.light-theme {
+            --background-color: #f8f9fa;
+            --text-color: #212529;
+            --card-background: rgba(255, 255, 255, 0.8);
+            --card-border: rgba(0, 0, 0, 0.1);
+        }
+
+        /* Animation for transitions */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.5s ease forwards;
+        }
+
+        /* Help modal */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(5px);
+        }
+
+        .modal-content {
+            background: var(--card-background);
+            border: 1px solid var(--card-border);
+            border-radius: var(--border-radius);
+            padding: 30px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: var(--shadow);
+            position: relative;
+        }
+
+        .close-modal {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: none;
+            border: none;
+            color: var(--text-color);
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+
+        /* Add focus styles for close modal button */
+        .close-modal:focus {
+            outline: var(--focus-outline);
+            outline-offset: 2px;
+        }
+
+        /* Focus-visible for better keyboard navigation */
+        .btn:focus-visible,
+        .noise-type:focus-visible,
+        .preset:focus-visible,
+        .volume-slider:focus-visible,
+        .theme-toggle:focus-visible,
+        a:focus-visible,
+        .close-modal:focus-visible {
+            outline: var(--focus-outline);
+            outline-offset: 2px;
+        }
+    </style>
+</head>
+<body>
+    <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark/light mode">🌙</button>
+    
+    <div class="container fade-in">
+        <h1>Ambient Noise Generator</h1>
+        <p class="description">Generate soothing background noise to help you focus, relax, or sleep better.</p>
+        
+        <div class="controls">
+            <div class="control-group">
+                <h2>Noise Controls</h2>
+                <button id="playPauseBtn" class="btn">
+                    <span id="playPauseIcon">▶️</span> 
+                    <span id="playPauseText">Play</span>
+                    <span class="tooltip">
+                        <span class="tooltiptext">Press Space to play/pause</span>
+                    </span>
+                </button>
+                
+                <div class="volume-control">
+                    <label for="volumeSlider">Volume</label>
+                    <input type="range" id="volumeSlider" class="volume-slider" min="0" max="100" value="50">
+                    <div class="volume-value" id="volumeValue">50%</div>
+                </div>
+                
+                <div class="noise-types">
+                    <div class="noise-type tooltip active" data-type="white" tabindex="0" role="button">
+                        <div class="noise-type-icon">⚪</div>
+                        <div>White Noise</div>
+                        <span class="tooltiptext">Uniform frequency distribution, like TV static. Good for masking all frequencies. (Press 1)</span>
+                    </div>
+                    <div class="noise-type tooltip" data-type="brown" tabindex="0" role="button">
+                        <div class="noise-type-icon">🟤</div>
+                        <div>Brown Noise</div>
+                        <span class="tooltiptext">Lower frequency emphasis, like a waterfall or heavy rain. Good for sleep and relaxation. (Press 2)</span>
+                    </div>
+                    <div class="noise-type tooltip" data-type="black" tabindex="0" role="button">
+                        <div class="noise-type-icon">⚫</div>
+                        <div>Black Noise</div>
+                        <span class="tooltiptext">Lowest frequency emphasis, like deep ocean sounds. Best for deep relaxation and meditation. (Press 3)</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="control-group">
+                <h2>Recording</h2>
+                <div class="btn-group">
+                    <button id="recordBtn" class="btn btn-secondary">
+                        <span id="recordIcon">⏺️</span> 
+                        <span id="recordText">Start Recording</span>
+                    </button>
+                    <button id="exportBtn" class="btn btn-accent" disabled>
+                        <span>💾</span> Export
+                    </button>
+                </div>
+                
+                <div class="status">
+                    <div class="status-indicator" id="recordingIndicator"></div>
+                    <div class="status-text" id="recordingStatus">Not recording</div>
+                    <div class="recording-timer" id="recordingTimer">00:00:00</div>
+                </div>
+                
+                <div class="presets-container">
+                    <h3>Presets</h3>
+                    <div class="presets">
+                        <div class="preset tooltip" data-type="white" data-volume="50" tabindex="0" role="button">
+                            Focus
+                            <span class="tooltiptext">White noise at medium volume - ideal for work and study</span>
+                        </div>
+                        <div class="preset tooltip" data-type="brown" data-volume="70" tabindex="0" role="button">
+                            Sleep
+                            <span class="tooltiptext">Brown noise at higher volume - perfect for sleeping</span>
+                        </div>
+                        <div class="preset tooltip" data-type="black" data-volume="40" tabindex="0" role="button">
+                            Meditate
+                            <span class="tooltiptext">Black noise at lower volume - great for meditation</span>
+                        </div>
+                        <div class="preset tooltip" data-type="white" data-volume="20" tabindex="0" role="button">
+                            Background
+                            <span class="tooltiptext">White noise at low volume - subtle background noise</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="visualizer-container">
+            <canvas id="visualizer"></canvas>
+        </div>
+        
+        <div class="keyboard-shortcuts">
+            <h3>Keyboard Shortcuts</h3>
+            <div class="shortcut-grid">
+                <span class="key">Space</span><span>Play/Pause</span>
+                <span class="key">↑</span><span>Increase Volume</span>
+                <span class="key">↓</span><span>Decrease Volume</span>
+                <span class="key">1</span><span>White Noise</span>
+                <span class="key">2</span><span>Brown Noise</span>
+                <span class="key">3</span><span>Black Noise</span>
+                <span class="key">R</span><span>Start/Stop Recording</span>
+                <span class="key">E</span><span>Export Recording</span>
+                <span class="key">?</span><span>Show Help</span>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>Created with Web Audio API | <a href="#" id="helpBtn">Help</a></p>
+        </div>
+    </div>
+    
+    <div class="modal" id="helpModal">
+        <div class="modal-content">
+            <button class="close-modal" id="closeModal" aria-label="Close help modal">&times;</button>
+            <h2>How to Use the Ambient Noise Generator</h2>
+            <h3>Noise Types</h3>
+            <p><strong>White Noise:</strong> Contains equal energy across all frequencies. It sounds like static or a rushing waterfall and is good for masking a variety of sounds.</p>
+            <p><strong>Brown Noise:</strong> Has more energy in the lower frequencies. It sounds deeper than white noise, similar to heavy rainfall or a strong river current. Great for sleep and relaxation.</p>
+            <p><strong>Black Noise:</strong> Emphasizes the lowest frequencies. It sounds like deep, rumbling thunder or ocean depths. Ideal for deep meditation and complete relaxation.</p>
+            
+            <h3>Controls</h3>
+            <p>Use the play/pause button to control playback. Adjust the volume slider to find your perfect level.</p>
+            <p>The presets provide quick access to common settings for different activities.</p>
+            
+            <h3>Recording</h3>
+            <p>You can record up to one hour of noise. Click "Start Recording" to begin, and "Stop Recording" when finished.</p>
+            <p>Use the "Export" button to download your recording as a WAV file.</p>
+            
+            <h3>Troubleshooting</h3>
+            <p>If you don't hear any sound, check your device's volume settings.</p>
+            <p>Some browsers may require permission to use audio features.</p>
+            <p>On mobile devices, you may need to interact with the page before audio will play.</p>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Audio context and nodes
+            let audioContext;
+            let noiseNode;
+            let gainNode;
+            let analyser;
+            let isPlaying = false;
+            let currentNoiseType = 'white';
+            let volume = 0.5;
+            
+            // Recording variables
+            let mediaRecorder;
+            let recordedChunks = [];
+            let isRecording = false;
+            let recordingStartTime;
+            let recordingTimer;
+            let maxRecordingTime = 60 * 60 * 1000; // 1 hour in milliseconds
+            
+            // DOM elements
+            const playPauseBtn = document.getElementById('playPauseBtn');
+            const playPauseIcon = document.getElementById('playPauseIcon');
+            const playPauseText = document.getElementById('playPauseText');
+            const volumeSlider = document.getElementById('volumeSlider');
+            const volumeValue = document.getElementById('volumeValue');
+            const noiseTypes = document.querySelectorAll('.noise-type');
+            const recordBtn = document.getElementById('recordBtn');
+            const recordIcon = document.getElementById('recordIcon');
+            const recordText = document.getElementById('recordText');
+            const exportBtn = document.getElementById('exportBtn');
+            const recordingIndicator = document.getElementById('recordingIndicator');
+            const recordingStatus = document.getElementById('recordingStatus');
+            const recordingTimerElement = document.getElementById('recordingTimer');
+            const visualizer = document.getElementById('visualizer');
+            const presets = document.querySelectorAll('.preset');
+            const themeToggle = document.getElementById('themeToggle');
+            const helpBtn = document.getElementById('helpBtn');
+            const helpModal = document.getElementById('helpModal');
+            const closeModal = document.getElementById('closeModal');
+            
+            // Canvas context for visualizer
+            const canvasCtx = visualizer.getContext('2d');
+            
+            // Initialize audio context
+            function initAudio() {
+                try {
+                    // Create audio context
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    
+                    // Create gain node for volume control
+                    gainNode = audioContext.createGain();
+                    gainNode.gain.value = volume;
+                    
+                    // Create analyser node for visualization
+                    analyser = audioContext.createAnalyser();
+                    analyser.fftSize = 2048;
+                    
+                    // Connect nodes
+                    gainNode.connect(analyser);
+                    analyser.connect(audioContext.destination);
+                    
+                    // Create and connect noise node
+                    createNoiseNode();
+                    
+                    // Start visualization
+                    visualize();
+                    
+                    return true;
+                } catch (error) {
+                    console.error('Error initializing audio:', error);
+                    alert('Error initializing audio. Please check if your browser supports Web Audio API.');
+                    return false;
+                }
+            }
+            
+            // Create noise generator node
+            function createNoiseNode() {
+                if (noiseNode) {
+                    noiseNode.disconnect();
+                }
+                
+                // Create buffer source
+                noiseNode = audioContext.createBufferSource();
+                noiseNode.loop = true;
+                
+                // Create noise buffer based on selected type
+                const bufferSize = audioContext.sampleRate * 2; // 2 seconds of audio
+                const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+                const data = buffer.getChannelData(0);
+                
+                // Generate noise based on type
+                switch (currentNoiseType) {
+                    case 'white':
+                        // White noise - equal energy per frequency
+                        for (let i = 0; i < bufferSize; i++) {
+                            data[i] = Math.random() * 2 - 1;
+                        }
+                        break;
+                    case 'brown':
+                        // Brown noise - more energy in lower frequencies
+                        let lastOut = 0;
+                        for (let i = 0; i < bufferSize; i++) {
+                            const white = Math.random() * 2 - 1;
+                            data[i] = (lastOut + (0.02 * white)) / 1.02;
+                            lastOut = data[i];
+                            data[i] *= 3.5; // Amplify to compensate for the filtering
+                        }
+                        break;
+                    case 'black':
+                        // Black noise - even more energy in lower frequencies
+                        let lastOut1 = 0, lastOut2 = 0;
+                        for (let i = 0; i < bufferSize; i++) {
+                            const white = Math.random() * 2 - 1;
+                            // Double integration of white noise
+                            lastOut1 = (lastOut1 + (0.02 * white)) / 1.02;
+                            lastOut2 = (lastOut2 + (0.03 * lastOut1)) / 1.03;
+                            data[i] = lastOut2 * 4.5; // Amplify to compensate for the filtering
+                        }
+                        break;
+                }
+                
+                noiseNode.buffer = buffer;
+                noiseNode.connect(gainNode);
+                
+                if (isPlaying) {
+                    noiseNode.start();
+                }
+            }
+            
+            // Toggle play/pause
+            function togglePlayPause() {
+                if (!audioContext) {
+                    if (!initAudio()) return;
+                }
+                
+                if (audioContext.state === 'suspended') {
+                    audioContext.resume();
+                }
+                
+                if (isPlaying) {
+                    // Pause
+                    noiseNode.stop();
+                    isPlaying = false;
+                    playPauseIcon.textContent = '▶️';
+                    playPauseText.textContent = 'Play';
+                } else {
+                    // Play
+                    createNoiseNode();
+                    noiseNode.start();
+                    isPlaying = true;
+                    playPauseIcon.textContent = '⏸️';
+                    playPauseText.textContent = 'Pause';
+                }
+            }
+            
+            // Set noise type
+            function setNoiseType(type) {
+                currentNoiseType = type;
+                
+                // Update UI
+                noiseTypes.forEach(element => {
+                    if (element.dataset.type === type) {
+                        element.classList.add('active');
+                    } else {
+                        element.classList.remove('active');
+                    }
+                });
+                
+                // Recreate noise node if playing
+                if (isPlaying) {
+                    noiseNode.stop();
+                    createNoiseNode();
+                    noiseNode.start();
+                }
+            }
+            
+            // Set volume
+            function setVolume(value) {
+                volume = value / 100;
+                volumeValue.textContent = `${value}%`;
+                
+                if (gainNode) {
+                    gainNode.gain.setValueAtTime(volume, audioContext ? audioContext.currentTime : 0);
+                }
+            }
+            
+            // Apply preset
+            function applyPreset(type, vol) {
+                setNoiseType(type);
+                volumeSlider.value = vol;
+                setVolume(vol);
+            }
+            
+            // Toggle recording
+            function toggleRecording() {
+                if (!isRecording) {
+                    startRecording();
+                } else {
+                    stopRecording();
+                }
+            }
+            
+            // Start recording
+            function startRecording() {
+                if (!audioContext) {
+                    if (!initAudio()) return;
+                }
+                
+                if (!isPlaying) {
+                    togglePlayPause();
+                }
+                
+                try {
+                    // Create media stream from audio context destination
+                    const dest = audioContext.createMediaStreamDestination();
+                    gainNode.connect(dest);
+                    
+                    // Create media recorder
+                    mediaRecorder = new MediaRecorder(dest.stream);
+                    
+                    // Set up event handlers
+                    mediaRecorder.ondataavailable = function(e) {
+                        if (e.data.size > 0) {
+                            recordedChunks.push(e.data);
+                        }
+                    };
+                    
+                    mediaRecorder.onstop = function() {
+                        isRecording = false;
+                        recordingIndicator.classList.remove('active');
+                        recordingStatus.textContent = 'Recording stopped';
+                        recordBtn.classList.remove('btn-accent');
+                        recordIcon.textContent = '⏺️';
+                        recordText.textContent = 'Start Recording';
+                        clearInterval(recordingTimer);
+                        exportBtn.disabled = false;
+                    };
+                    
+                    // Start recording
+                    recordedChunks = [];
+                    mediaRecorder.start(1000); // Collect data in 1-second chunks
+                    isRecording = true;
+                    recordingStartTime = Date.now();
+                    
+                    // Update UI
+                    recordingIndicator.classList.add('active');
+                    recordingStatus.textContent = 'Recording...';
+                    recordBtn.classList.add('btn-accent');
+                    recordIcon.textContent = '⏹️';
+                    recordText.textContent = 'Stop Recording';
+                    
+                    // Start timer
+                    updateRecordingTimer();
+                    recordingTimer = setInterval(updateRecordingTimer, 1000);
+                    
+                    // Set timeout for maximum recording duration
+                    setTimeout(() => {
+                        if (isRecording) {
+                            stopRecording();
+                            alert('Maximum recording time (1 hour) reached.');
+                        }
+                    }, maxRecordingTime);
+                    
+                } catch (error) {
+                    console.error('Error starting recording:', error);
+                    alert('Error starting recording. Please check if your browser supports MediaRecorder API.');
+                }
+            }
+            
+            // Stop recording
+            function stopRecording() {
+                if (mediaRecorder && isRecording) {
+                    mediaRecorder.stop();
+                }
+            }
+            
+            // Export recording
+            function exportRecording() {
+                if (recordedChunks.length === 0) {
+                    alert('No recording available to export.');
+                    return;
+                }
+                
+                // Create blob from recorded chunks
+                const blob = new Blob(recordedChunks, { type: 'audio/wav' });
+                
+                // Create download link
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = `ambient-noise-${currentNoiseType}-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.wav`;
+                
+                // Trigger download
+                document.body.appendChild(a);
+                a.click();
+                
+                // Clean up
+                setTimeout(() => {
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                }, 100);
+            }
+            
+            // Update recording timer display
+            function updateRecordingTimer() {
+                if (!isRecording) return;
+                
+                const elapsed = Date.now() - recordingStartTime;
+                const seconds = Math.floor((elapsed / 1000) % 60);
+                const minutes = Math.floor((elapsed / (1000 * 60)) % 60);
+                const hours = Math.floor(elapsed / (1000 * 60 * 60));
+                
+                recordingTimerElement.textContent = 
+                    `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            }
+            
+            // Visualize audio
+            function visualize() {
+                if (!analyser) return;
+                
+                const bufferLength = analyser.frequencyBinCount;
+                const dataArray = new Uint8Array(bufferLength);
+                
+                // Set canvas size to match container
+                visualizer.width = visualizer.offsetWidth;
+                visualizer.height = visualizer.offsetHeight;
+                
+                function draw() {
+                    requestAnimationFrame(draw);
+                    
+                    analyser.getByteTimeDomainData(dataArray);
+                    
+                    canvasCtx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+                    canvasCtx.fillRect(0, 0, visualizer.width, visualizer.height);
+                    
+                    canvasCtx.lineWidth = 2;
+                    canvasCtx.strokeStyle = getVisualizerColor();
+                    canvasCtx.beginPath();
+                    
+                    const sliceWidth = visualizer.width / bufferLength;
+                    let x = 0;
+                    
+                    for (let i = 0; i < bufferLength; i++) {
+                        const v = dataArray[i] / 128.0;
+                        const y = v * visualizer.height / 2;
+                        
+                        if (i === 0) {
+                            canvasCtx.moveTo(x, y);
+                        } else {
+                            canvasCtx.lineTo(x, y);
+                        }
+                        
+                        x += sliceWidth;
+                    }
+                    
+                    canvasCtx.lineTo(visualizer.width, visualizer.height / 2);
+                    canvasCtx.stroke();
+                }
+                
+                draw();
+            }
+            
+            // Get color for visualizer based on noise type
+            function getVisualizerColor() {
+                switch (currentNoiseType) {
+                    case 'white': return '#3a86ff';
+                    case 'brown': return '#8a5a44';
+                    case 'black': return '#7209b7';
+                    default: return '#3a86ff';
+                }
+            }
+            
+            // Toggle theme
+            function toggleTheme() {
+                const body = document.body;
+                if (body.classList.contains('light-theme')) {
+                    body.classList.remove('light-theme');
+                    themeToggle.textContent = '🌙';
+                    localStorage.setItem('theme', 'dark');
+                } else {
+                    body.classList.add('light-theme');
+                    themeToggle.textContent = '☀️';
+                    localStorage.setItem('theme', 'light');
+                }
+            }
+            
+            // Load saved theme
+            function loadTheme() {
+                const savedTheme = localStorage.getItem('theme');
+                if (savedTheme === 'light') {
+                    document.body.classList.add('light-theme');
+                    themeToggle.textContent = '☀️';
+                }
+            }
+            
+            // Handle keyboard shortcuts
+            function handleKeyboardShortcuts(e) {
+                // Don't trigger shortcuts if user is typing in an input
+                if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+                    return;
+                }
+                
+                switch (e.key) {
+                    case ' ': // Space
+                        e.preventDefault();
+                        togglePlayPause();
+                        break;
+                    case 'ArrowUp': // Up arrow
+                        e.preventDefault();
+                        volumeSlider.value = Math.min(100, parseInt(volumeSlider.value) + 5);
+                        setVolume(volumeSlider.value);
+                        break;
+                    case 'ArrowDown': // Down arrow
+                        e.preventDefault();
+                        volumeSlider.value = Math.max(0, parseInt(volumeSlider.value) - 5);
+                        setVolume(volumeSlider.value);
+                        break;
+                    case '1': // White noise
+                        setNoiseType('white');
+                        break;
+                    case '2': // Brown noise
+                        setNoiseType('brown');
+                        break;
+                    case '3': // Black noise
+                        setNoiseType('black');
+                        break;
+                    case 'r': // Toggle recording
+                    case 'R':
+                        toggleRecording();
+                        break;
+                    case 'e': // Export recording
+                    case 'E':
+                        if (!exportBtn.disabled) {
+                            exportRecording();
+                        }
+                        break;
+                    case '?': // Show help
+                        helpModal.style.display = 'flex';
+                        break;
+                }
+            }
+            
+            // Add keyboard support for interactive elements
+            function addKeyboardSupport() {
+                // For noise type buttons
+                noiseTypes.forEach(element => {
+                    element.addEventListener('keydown', function(e) {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setNoiseType(this.dataset.type);
+                        }
+                    });
+                });
+                
+                // For preset buttons
+                presets.forEach(preset => {
+                    preset.addEventListener('keydown', function(e) {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            applyPreset(this.dataset.type, this.dataset.volume);
+                        }
+                    });
+                });
+            }
+            
+            // Event listeners
+            playPauseBtn.addEventListener('click', togglePlayPause);
+            
+            volumeSlider.addEventListener('input', function() {
+                setVolume(this.value);
+            });
+            
+            noiseTypes.forEach(element => {
+                element.addEventListener('click', function() {
+                    setNoiseType(this.dataset.type);
+                });
+            });
+            
+            recordBtn.addEventListener('click', toggleRecording);
+            exportBtn.addEventListener('click', exportRecording);
+            
+            presets.forEach(preset => {
+                preset.addEventListener('click', function() {
+                    applyPreset(this.dataset.type, this.dataset.volume);
+                });
+            });
+            
+            themeToggle.addEventListener('click', toggleTheme);
+            
+            helpBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                helpModal.style.display = 'flex';
+            });
+            
+            closeModal.addEventListener('click', function() {
+                helpModal.style.display = 'none';
+            });
+            
+            window.addEventListener('click', function(e) {
+                if (e.target === helpModal) {
+                    helpModal.style.display = 'none';
+                }
+            });
+            
+            document.addEventListener('keydown', handleKeyboardShortcuts);
+            
+            // Handle window resize for canvas
+            window.addEventListener('resize', function() {
+                if (visualizer) {
+                    visualizer.width = visualizer.offsetWidth;
+                    visualizer.height = visualizer.offsetHeight;
+                }
+            });
+            
+            // Initialize
+            loadTheme();
+            addKeyboardSupport();
+        });
+    </script>
+</body>
+</html>
